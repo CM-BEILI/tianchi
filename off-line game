@@ -1,0 +1,157 @@
+import os
+import sys
+import timeit
+import pandas as pd
+import matplotlib.pyplot as plt
+# %matplotlib inline   invalid in pycharm
+
+start_time = timeit.default_timer()
+
+count_all = 0  # count all of behavior
+count_4 = 0  # the count of behavior_type = 4
+
+for df in pd.read_csv(open('D:/天池data/fresh_comp_offline/tianchi_fresh_comp_train_user.csv','r'),
+                     chunksize = 100000):
+    try:
+        count_user = df['behavior_type'].value_counts()
+        count_all += count_user[1] + count_user[2] + count_user[3] + count_user[4]
+        count_4 += count_user[4]
+    except StopIteration:
+        print("Iteration is stopped.")
+        break
+
+# calculation of CTR
+ctr = count_4 / count_all
+#  ctr=0.009985776926023916 = 1%
+
+'''
+behavior_type 2 to 4 collecting(=2) to buying(=4) 
+'''
+
+batch = 0
+dateparse = lambda dates: pd.datetime.strptime(dates, '%Y-%m-%d %H')
+
+for df in pd.read_csv(open("D:/天池data/fresh_comp_offline/tianchi_fresh_comp_train_user.csv", 'r'),
+                      chunksize=100000):
+    try:
+        df_bv_24 = df[df['behavior_type'].isin([2, 4])]
+        df_bv_24.to_csv('D:/天池data/fresh_comp_offline/bv_24.csv',
+                        columns=['time', 'user_id', 'item_id', 'behavior_type'],
+                        index=False, header=False,
+                        mode='a')
+        batch += 1
+        print('chunk %d done.' % batch)
+
+    except StopIteration:
+        print("finish.")
+        break
+
+data_file = open('D:/天池data/fresh_comp_offline/bv_24.csv', 'r')
+try:
+    dateparse = lambda dates: pd.datetime.strptime(dates, '%Y-%m-%d %H')
+    df_bv_24 = pd.read_csv(data_file,
+                            parse_dates = [0],
+                            date_parser = dateparse,
+                            index_col = False)
+    df_bv_24.columns = ['time','user_id','item_id','behavior_type']
+    df_bv_24 = df_bv_24.drop_duplicates(['user_id','item_id','behavior_type'])
+finally:
+    data_file.close()
+
+df_time_2 = df_bv_24[df_bv_24['behavior_type'].isin(['2'])][['user_id','item_id','time']]  #collecting
+df_time_4 = df_bv_24[df_bv_24['behavior_type'].isin(['4'])][['user_id','item_id','time']]  #buying
+df_time_2.columns = ['user_id','item_id', 'time2']  # set time to time2
+df_time_4.columns = ['user_id','item_id', 'time4']  # set time to time4
+
+del df_bv_24   # save memory
+
+df_time = pd.merge(df_time_2,df_time_4,on=['user_id','item_id'],how='outer') #merge 2&4  outer
+df_time_24 = df_time.dropna() #drop NaN
+
+'''
+df_time_2 store the sample contain only behavior_type = 2 for predict
+'''
+df_time_2 = df_time[df_time['time4'].isnull()].drop(['time4'], axis = 1) #drop list4
+df_time_2 = df_time_2.dropna() # just leave 2 to predict
+
+# save middle data set
+df_time_2.to_csv('D:/天池data/fresh_comp_offline/time_2.csv',
+                  columns=['user_id','item_id','time2'],
+                  index=False)
+df_time_24.to_csv('D:/天池data/fresh_comp_offline/time_24.csv',
+                  columns=['user_id','item_id','time2', 'time4'],
+                  index=False)
+
+''' calculation for time decay from collecting 2 to buying 4
+'''
+data_file = open('D:/天池data/fresh_comp_offline/time_24.csv', 'r')
+try:
+    df_time_24 = pd.read_csv(data_file,
+                             parse_dates=['time2', 'time4'],
+                             index_col=False)
+finally:
+    data_file.close()
+
+delta_time = df_time_24['time4'] - df_time_24['time2']
+delta_hour = []
+for i in range(len(delta_time)):
+    d_hour = delta_time[i].days * 24 + delta_time[i]._h
+    if d_hour < 0:
+        continue
+    else:
+        delta_hour.append(d_hour)
+
+# draw the picture for delta_hour
+f1 = plt.figure(1)
+plt.hist(delta_hour, 30)
+plt.xlabel('hours')
+plt.ylabel('count')
+plt.title('time decay for 2 to 4')
+plt.grid(True)
+plt.show()
+
+'''
+Conclusion : select day = 1 ,means use date = 2014-12-18 to predict 12-19 data
+
+last work , merge table(item)
+'''
+
+data_file = open('D:/天池data/fresh_comp_offline/time_2.csv', 'r')
+try:
+    df_time_2 = pd.read_csv(data_file,
+                            parse_dates=['time2'],
+                            index_col=['time2'])
+finally:
+    data_file.close()
+
+ui_pred = df_time_2['2014-12-18']
+
+#read table item
+data_file = open('D:/天池data/fresh_comp_offline/tianchi_fresh_comp_train_item.csv','r')
+try:
+    df_item = pd.read_csv(data_file,index_col = False)
+finally:
+    data_file.close()
+
+ui_pred_in_P = pd.merge(ui_pred,df_item,on = ['item_id'])  #merge on item_id
+
+# finally file name should be tianchi_mobile_recommendation_predict
+ui_pred_in_P.to_csv('D:/天池data/fresh_comp_offline/tianchi_mobile_recommendation_predict42.csv',
+                    columns=['user_id','item_id'],
+                    index=False)
+
+end_time = timeit.default_timer()
+print(('The code for file ' + os.path.split(__file__)[1] +
+       ' ran for %.2fm' % ((end_time - start_time) / 60.)), file = sys.stderr)
+
+#The code for file off-line game.py ran for 1.16m
+
+'''
+with the same way to calculate shopping trolley 3 to buying 4  
+'''
+
+'''
+Finally Score:
+    2 to 4 score:0.0183
+    3 to 4 score:0.0665 rank47
+'''
