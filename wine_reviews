@@ -91,9 +91,260 @@ US、France 作为葡萄酒大国，均分处在中等水平，
 Spain 作为葡萄酒第二大国，均分较低，也不存在绝佳的葡萄酒产品，整体质量有待提高。
 '''
 
+'''
+3 -葡萄酒价格
+'''
+
+#3- 1 整体价格情况
+plt.figure(figsize=(15,15))
+sns.distplot(wine.price.dropna())
+
+#根据葡萄酒的价格分布可知：
+#葡萄酒价格一般在 0~100 之间，超过 500 以上的可认为是高端酒类，超过 1000 以上则是顶级奢华酒类。
+
+high_price=wine[wine.price>=1000][['country','province',
+                                   'designation','points',
+                                   'variety','price']].sort_values(by='price')
+high_price.plot(kind='bar',x='variety',y='price')
+
+'''
+最顶级的葡萄酒种类为：Bordeaux-style Red Blend、Pinot Noir、Chardonnay、Grüner Veltliner、Port 和Bordeaux-style White Blend；
+法国 Bordeaux 盛产顶级葡萄酒，主要是以 Bordeaux 命名的两类葡萄酒：Bordeaux-style Red Blend、Bordeaux-style White Blend；
+顶级葡萄酒的评分除一项外均在 90 分以上，证明其品质优秀，也说明了“贵的有道理”；
+价格最高（3300）的葡萄酒评分反而低于 90，一方面可能是其本身质量不够好，也有可能是因其定价远超 出其质量导致了低分效应
+'''
+
+#3 - 2 价格和评分的关系
+plt.figure(figsize=(12,12))
+sns.scatterplot(x='price',y='points',data=wine)
+
+a=wine[['points','price']].corr()
+print('价格和评分的整体相关性系数为%.4f'%(a[0:1]['price']))
+b=wine[wine.price<100][['points','price']].corr()
+print('单价为 100 以下的葡萄酒价格和评分的相关性系数为%.4f'%(b[0:1]['price']))
+
+#单价为 100 以下的葡萄酒价格和评分的相关性系数为 0.5501，可以认为价格和评分有一定的正相关关系；
+#单价在 100 以上后，价格和评分的相关性减弱，有可能是这些商品的定价因素有很多的其他附属价值，而不 是单纯的葡萄酒质量。
+
+#利用单价 100 以下的数据建立回归模型：
+plt.figure(figsize=(12,12))
+sns.lmplot(x='price',y='points',data=(wine[wine.price<100][['points','price']]))
+
+from sklearn import linear_model #导入机器学习库中的线性回归方法
+x=np.array(wine[wine.price<100]['price']).reshape(151617,1)
+y=np.array(wine[wine.price<100]['points']).reshape(151617,1)
+#建立回归模型
+model=linear_model.LinearRegression()
+model.fit(x,y)
+#获取模型
+coef=model.coef_ #获取自变量系数
+model_intercept=model.intercept_#获取截距
+R2=model.score(x,y) #R 的平方
+print('线性回归方程为：','\n','y=’{}*x+{}'.format(coef,model_intercept))
+
+#线性回归方程为：  y=’[[0.09049285]]*x+[85.31730978]
+
+#3-3 高性价比葡萄酒推荐库
+
+#确定每个价格段的评分最高的 10 个葡萄酒
+temp=list(wine.groupby('price').points.nlargest(5).to_frame().reset_index().level_1)
+#创建新表作为葡萄酒推荐库
+wine_recommend=wine.loc[temp].reset_index(drop=True)
+plt.figure(figsize=(15, 10))
+sns.scatterplot(y='points',x='price',hue='country',data=wine_recommend)
+#创建葡萄酒推荐库，当用户输入预期价格时，会自动推荐性价比最高的葡萄酒：
+
+print('请输入您的葡萄酒预期价格：')
+a=float(input(''))
+# 如果价格正好有
+if a in list(wine_recommend.price):
+    temp=wine_recommend[wine_recommend.price==a]
+    for i in list(temp.index):
+        if temp.loc[i].designation: #如果有葡萄酒名字
+            print(' 为 您 推 荐 ： 来 自 %s 的 %s 种 类 的 %s 葡 萄 酒 ， 价 格 为 %.1f ,得 分 为 %.1f 。\
+        '%(temp.loc[i].country,temp.loc[i].variety,temp.loc[i].designation,temp.loc[i].price,temp.loc[i].points))
+        else:
+            print(' 为 您 推 荐 ： 来 自 %s 的 %s 类 葡 萄 酒 ， 价 格 为 %.1f ， 得 分 为 %.1f 。\
+        '%(temp.loc[i].country,temp.loc[i].variety,temp.loc[i].price,temp.loc[i].points))
+else:
+    print('没有合适的价格，请重新输入')
+
+'''
+请输入您的葡萄酒预期价格：
+80
+ 为 您 推 荐 ： 来 自 US 的 Syrah 种 类 的 Royal City 葡 萄 酒 ， 价 格 为 80.0 ,得 分 为 100.0 。        
+ 为 您 推 荐 ： 来 自 US 的 Syrah 种 类 的 Bionic Frog 葡 萄 酒 ， 价 格 为 80.0 ,得 分 为 100.0 。        
+ 为 您 推 荐 ： 来 自 US 的 Chardonnay 种 类 的 Wayfarer Vineyard 葡 萄 酒 ， 价 格 为 80.0 ,得 分 为 98.0 。        
+ 为 您 推 荐 ： 来 自 Italy 的 Sangiovese Grosso 种 类 的 Tenuta Nuova 葡 萄 酒 ， 价 格 为 80.0 ,得 分 为 97.0 。        
+ 为 您 推 荐 ： 来 自 US 的 Cabernet Sauvignon 种 类 的 The Widowmaker 葡 萄 酒 ， 价 格 为 80.0 ,得 分 为 97.0 。   
+'''
+
+'''
+4 葡萄酒描述词库
+4.1 整体关键词描述
+'''
+from wordcloud import WordCloud
+wc=WordCloud(background_color="white", max_words=200, colormap="Set2")
+#略过了创建停用词库进行数据清洗的环节
+words=wine.description
+wc.generate(''.join(str(words)))
+plt.figure(figsize=(10, 10))
+plt.imshow(wc, interpolation='bilinear')
+plt.axis("off")
+plt.show()
+#整体性的关键词描述：wine、aromas、Cabernet、blackberry、blend 等；
+
+# 4 - 2 创建不同种类葡萄酒的词频库
+
+#只为拥有数量在 100 之上的种类创建词频库
+temp=wine.variety.value_counts()
+temp=temp[temp>100].to_frame().reset_index()
+temp=temp.drop(labels='variety',axis=1)
+temp.columns=['variety']
+#用 inner 联结的方式创建新表
+wine_words=pd.merge(wine,temp,on='variety')
+temp1=wine_words.groupby(by='variety').description.apply(lambda x:''.join(str(x)))
+#创建一个 dataframe，列名为种类，值为种类的关键词
+wine_keys=pd.DataFrame()
+for variety_name in temp1.index:
+    words=temp1[variety_name].lower().split()[1:]
+    a=dict()
+    for word in words:
+        if word not in a:
+            a[word] = 1
+        else:
+            a[word] = a[word] + 1
+    a=pd.Series(a)
+    a=a.sort_values(ascending=False)[0:30]
+    wine_keys[variety_name]=list(a.index)
+#对字典键值（出现频次）排序，返回出现频次最高的 30 个关键词,并更新在词频库中
+
+#词频库中存在大量的停用词，没有处理的
+'''
+词频库的反馈规则为：
+1、如果某个词没有出现，则认为无法判断；
+2、如果某个词在超过 10 个种类中出现，则认为无法判断；
+3、如果某个词在小于 10 个种类中出现，则返回排名最高的那五个类；
+反馈规则也有很大问题，不再深究了
+'''
+print('请输入一个关键词：')
+keywords=input()
+
+#创建一个字典（再转化成 dataframe）记录所属关键词所属的种类，以及索引。
+#如果种类数小于 10，则返回索引最小的那几个种类
+
+a=dict()
+for variety_name in list(wine_keys.columns):
+    if (wine_keys[variety_name]==keywords).sum()==1:
+        a[variety_name]=(wine_keys[variety_name]==keywords).idxmax()
+        
+a=pd.Series(a)
+if a.shape[0]>10:
+    print('信息不足，无法判断')
+else:
+    b=a.sort_values()[0:5]
+    print('根据您输入的信息，为您推荐相关的葡萄酒种类：')
+    for aaa in list(b.index):
+        print(aaa)
+
+# 输入小写
+'''
+请输入一个关键词：
+pinot
+根据您输入的信息，为您推荐相关的葡萄酒种类：
+Pinot Nero
+Pinot Bianco
+Pinot Grigio
+Pinot Gris
+Sparkling Blend
+'''
+
+'''
+5 -品鉴师信息
+5-1 品鉴师总体情况
+'''
+
+wine.taster_name.value_counts().plot(kind='bar',figsize=(12,12))
+plt.xticks(rotation=90)
+
+#一共有 19 位品鉴师，其中 Roger Voss、Michael Schachner、Kerin O’Keefe、Virginie Boone、Paul Gregutt 等人 
+#是最资深的葡萄酒品鉴专家，并负责了市场上绝大部分的葡萄酒品鉴工作。
+
+#5-2 受到不同市场青睐的品鉴师
+wine.groupby('taster_name').price.describe().sort_values(by='count',ascending=False)
+
+plt.figure(figsize=(12,12))
+wine_taster=wine[(wine.taster_name=='Roger Voss')|(wine.taster_name=='Michael Schachner')| (wine.taster_name
+=='Kerin O’Keefe')|(wine.taster_name=='Virginie Boone')|(wine.taster_name=='Paul Gregutt')]
+sns.boxplot(y='points',x='taster_name',data=wine_taster)
+plt.xticks(rotation=90)
+
+'''
+从表中数据可以看出：
+Roger Voss 作为最资深的葡萄酒品鉴专家，品鉴种类相当广泛，涵盖低中高市场，
+同时拥有对最顶级奢华葡 萄酒（价格为 3300）的品鉴经验；
+
+Kerin O’Keefe 和 Virginie Boone 则主要受到中高端葡萄酒商家的青睐，
+品鉴的葡萄酒均价为分别为 41.9 和 49.5，评分也比较集中在一般和良好之间；
+
+Michael Schachner 则主要瞄准中低端市场，品鉴的葡萄酒均价为 25.69，相应的葡萄酒评分较低。
+
+Kerin O’Keefe 和 Virginie Boone 同为中高端市场的品鉴专家，评分上面却存在较大差异，
+这可能是由于 Kerin O’Keefe 较为严苛所致，对此还可以进一步进行佐证的是：
+Paul Gregutt 品鉴的葡萄酒价格整体较 Kerin O’Keefe 更低，但是整体评分却比 Kerin O’Keefe 的更高。
+'''
+
+#5-3 品鉴师品鉴种类及联系方式概览
+
+#创建一个表，收集每个品鉴师品鉴最多的五个种类
+temp=wine.groupby('taster_name').variety.value_counts().to_frame()
+temp.columns=['num']
+temp=temp.reset_index(level='variety')
+
+taster_variety = pd.DataFrame()
+for aaa in temp.index:
+    taster_variety[aaa]=list(temp.loc[aaa].variety[0:5])
+
+taster_variety=taster_variety.T
+taster_variety=taster_variety.reset_index()
+taster_variety.columns=[['taster_name','variety1',
+                         'variety2','variety3','variety4','variety5']]
+
+#创建一个表，收集品鉴师的联系方式，该表按照品鉴师资深程度排列
+link=wine[['taster_name','taster_twitter_handle']].dropna().drop_duplicates()
+namelist=list(wine.taster_name.value_counts().index)
+
+name_link=pd.DataFrame(dict(zip(namelist,namelist)),index=['taster_twitter_handle'])
+
+for aaa in namelist:
+    if aaa in list(link.taster_name):
+        name_link[aaa]=list(link[link.taster_name==aaa].taster_twitter_handle)[0]
+    else:
+        name_link[aaa]='@'
+
+name_link=name_link.T.reset_index()
+name_link.columns=[['taster_name','taster_twitter_handle']]
+
+#联结两表
+taster_info=pd.merge(name_link,taster_variety)
+
+print(taster_info)
 
 
+'''
+总结
+US、France、Italy、Spain 都是葡萄酒大国，US 无论是葡萄酒数量还是高性价比葡萄酒数量都稳居榜首，
+France擅产顶级奢侈葡萄酒，Italy 把市场瞄准在中端市场，Spain 的整体质量有待提高；
 
+数量最多的葡萄酒种类有 Pinot Noir 、Chardonnay 、Cabernet Sauvignon 等，
+其中最顶级的葡萄酒种类为：Bordeaux-style Red Blend、Pinot Noir、Chardonnay、Grüner Veltliner、Port 和Bordeaux-style White Blend； 
+
+葡萄酒描述关键词有：wine、aromas、Cabernet、blackberry、blend 等，
+同时创建了不同种类葡萄酒的词频库，用户输入关键词，可以反馈适合的葡萄酒种类； 
+
+葡萄酒品鉴师中，Roger Voss、Kerin O’Keefe、Virginie Boone 和 Michael Schachner 都是资深的专家，
+面向的市场各有不同；同时创建了品鉴师名录，显示品鉴师联系方式，以及品鉴最多的五类葡萄酒。
+'''
 
 
 
