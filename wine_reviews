@@ -1,0 +1,100 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+%matplotlib inline
+import seaborn as sns
+
+wine1 = pd.read_csv('D:/天池data/wine/winemag-data_first150k.csv')
+#wine1.info()
+
+wine2 = pd.read_csv('D:/天池data/wine/winemag-data-130k-v2.csv')
+#wine2.info()
+
+wine = pd.concat([wine1,wine2],ignore_index=True,sort=False) #concat 2 tables
+wine = wine.drop(labels = 'Unnamed: 0',axis=1)  #drop unused column 
+#wine.info()
+
+wine.duplicated().value_counts() # 查看重复数据
+wine = wine.drop_duplicates() # 去重 处理数据
+
+wine = wine.drop_duplicates(['country','description','designation','province','points','price'])
+wine = wine.reset_index(drop=True)
+
+wine.describe() # 查看后数据合理
+
+'''
+1 - 葡萄酒种类
+'''
+
+temp=wine.variety.value_counts()[0:15] #查看top15
+ax=temp.plot(kind='bar',title='top 15 of Wine Virieties',colormap='Accent')
+plt.ylabel('Quantity',fontsize=12)
+#数量最多的葡萄酒种类有 Pinot Noir 、Chardonnay 、Cabernet Sauvignon 等等。
+
+
+temp=wine.country.value_counts()
+temp.plot(kind='pie',title='Ratio of each group',autopct='%.2f%%',figsize=(14,14))  #autopct='%.2f%%',图例
+plt.legend(bbox_to_anchor=(1,1)) #将图例设置在图片外
+
+temp=wine.groupby(['country','variety']).variety.count()
+  #type(temp) 
+  #pandas.core.series.Series
+temp=temp.to_frame() # to datafrane
+
+temp.columns=['quantity']
+temp['rank_variety']=temp.quantity
+temp['rank_variety']=temp.groupby(by='country').rank_variety.apply(lambda
+    x:x.rank(method='min',ascending=False))
+# 组内排序（国家内部种类排序）
+
+temp1=temp.groupby(by=['country']).quantity.sum().rank(method='min',ascending=False).sort_values()
+temp1=temp1.to_frame()
+temp1.columns=['rank_country']
+#temp1 国家排序
+
+temp2=pd.merge(temp,temp1,on='country',right_index=True)
+#temp2 把国家排行加上
+
+temp3=temp2.sort_values(by=['rank_country','rank_variety'])
+temp3[temp3.rank_variety<6]
+# 提供一个表查询，可以返回每个国家数量最多的五类葡萄酒。
+temp3.to_csv('D:/天池data/wine/每个国家数量最多的五类葡萄酒.csv')
+
+'''
+2 - 葡萄酒质量
+'''
+
+sns.set(style="darkgrid")
+sns.boxplot(y='points',data=wine)
+wine.points.describe()
+
+'''
+葡萄酒平均得分为 88.24 分，可以认为：
+优秀：90 分及以上 \ 良好：88.5~90 分 \ 一般：86~88.5 分 \ 较差：86 分以下 \
+'''
+temp= wine.country.value_counts()[0:15]
+# 查看top15 国家
+country_15=temp.to_frame().reset_index()
+country_15.columns = ['country','sum']
+
+temp1 = pd.merge(country_15,wine,on='country',how='left')
+temp1 = temp1[['country','sum','points']]
+
+plt.figure(figsize=(12,12))
+plt.xticks(rotation=30)
+sns.boxplot(x='country',y='points',data=temp1)
+
+'''
+Canada、Austria 虽然不是不是葡萄酒的盛产国，但其平均分治较高，而且低分葡萄酒较少，
+表明这些国家的葡萄酒质量有一定的保障，但没有绝佳的葡萄酒产品；
+US、France 作为葡萄酒大国，均分处在中等水平，
+同时存在绝佳的葡萄酒（满分产品）以及质量较差的葡萄酒（最低分产品），葡萄酒整体质量尚可，
+Spain 作为葡萄酒第二大国，均分较低，也不存在绝佳的葡萄酒产品，整体质量有待提高。
+'''
+
+
+
+
+
+
+
+
